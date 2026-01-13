@@ -1,0 +1,41 @@
+{
+  "tests": [
+    {
+      "name": "Create order with valid data",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "customer_name": "Иван Тестовый",
+        "customer_email": "test@example.com",
+        "customer_phone": "+79001234567",
+        "delivery_address": "Москва, ул. Тестовая, д. 1",
+        "cart_items": [
+          {
+            "id": 1,
+            "name": "Test Product",
+            "price": 1000,
+            "quantity": 2
+          }
+        ]
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "order_id": "number",
+        "total_amount": "number",
+        "message": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get all orders",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "orders": "array"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

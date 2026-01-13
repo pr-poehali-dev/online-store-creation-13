@@ -3,6 +3,11 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 import Icon from '@/components/ui/icon';
 
 interface Product {
@@ -22,6 +27,18 @@ const Index = () => {
   const [currentPage, setCurrentPage] = useState<'home' | 'catalog' | 'portfolio' | 'blog' | 'about'>('home');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const { toast } = useToast();
+  
+  const [formData, setFormData] = useState({
+    customer_name: '',
+    customer_email: '',
+    customer_phone: '',
+    delivery_address: ''
+  });
 
   const products: Product[] = [
     {
@@ -99,6 +116,78 @@ const Index = () => {
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleCheckout = async () => {
+    if (!formData.customer_name || !formData.customer_email || !formData.customer_phone || !formData.delivery_address) {
+      toast({
+        title: 'Ошибка',
+        description: 'Заполните все поля',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('https://functions.poehali.dev/762bfbcb-bbe3-4f88-a9a1-50b1a332ac62', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          customer_name: formData.customer_name,
+          customer_email: formData.customer_email,
+          customer_phone: formData.customer_phone,
+          delivery_address: formData.delivery_address,
+          cart_items: cart.map(item => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity
+          }))
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOrderId(data.order_id);
+        setOrderSuccess(true);
+        setShowCheckout(false);
+        setCart([]);
+        setFormData({
+          customer_name: '',
+          customer_email: '',
+          customer_phone: '',
+          delivery_address: ''
+        });
+
+        if (data.payment_url) {
+          window.location.href = data.payment_url;
+        } else {
+          toast({
+            title: 'Заказ оформлен!',
+            description: `Номер заказа: #${data.order_id}. Мы свяжемся с вами для подтверждения.`
+          });
+        }
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: data.error || 'Не удалось создать заказ',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Ошибка соединения с сервером',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const filteredProducts = selectedCategory === 'all'
     ? products
@@ -196,7 +285,10 @@ const Index = () => {
                           <span className="text-lg font-semibold">Итого:</span>
                           <span className="text-2xl font-black text-primary">{totalPrice.toLocaleString()} ₽</span>
                         </div>
-                        <Button className="w-full clip-slant bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity font-bold text-lg py-6">
+                        <Button 
+                          onClick={() => setShowCheckout(true)}
+                          className="w-full clip-slant bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity font-bold text-lg py-6"
+                        >
                           Оформить заказ
                         </Button>
                       </div>
@@ -466,6 +558,88 @@ const Index = () => {
           </div>
         </div>
       )}
+
+      <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">Оформление заказа</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label htmlFor="name">Ваше имя *</Label>
+              <Input
+                id="name"
+                value={formData.customer_name}
+                onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+                placeholder="Иван Иванов"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.customer_email}
+                onChange={(e) => setFormData({ ...formData, customer_email: e.target.value })}
+                placeholder="ivan@example.com"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Телефон *</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={formData.customer_phone}
+                onChange={(e) => setFormData({ ...formData, customer_phone: e.target.value })}
+                placeholder="+7 (900) 123-45-67"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="address">Адрес доставки *</Label>
+              <Textarea
+                id="address"
+                value={formData.delivery_address}
+                onChange={(e) => setFormData({ ...formData, delivery_address: e.target.value })}
+                placeholder="Город, улица, дом, квартира"
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+            <div className="border-t pt-4 flex justify-between items-center">
+              <span className="text-lg font-semibold">Итого:</span>
+              <span className="text-2xl font-black text-primary">{totalPrice.toLocaleString()} ₽</span>
+            </div>
+            <Button
+              onClick={handleCheckout}
+              disabled={isSubmitting}
+              className="w-full bg-gradient-to-r from-primary to-secondary hover:opacity-90 transition-opacity font-bold text-lg py-6"
+            >
+              {isSubmitting ? 'Обработка...' : 'Подтвердить заказ'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={orderSuccess} onOpenChange={setOrderSuccess}>
+        <DialogContent className="sm:max-w-md text-center">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-primary">Заказ оформлен! 🎉</DialogTitle>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Icon name="CheckCircle2" size={32} className="text-primary" />
+            </div>
+            <p className="text-lg mb-2">Номер заказа: <span className="font-bold">#{orderId}</span></p>
+            <p className="text-muted-foreground">Мы свяжемся с вами для подтверждения доставки</p>
+          </div>
+          <Button onClick={() => setOrderSuccess(false)} className="w-full">
+            Продолжить покупки
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <footer className="bg-card/50 border-t border-border py-8 mt-20">
         <div className="container mx-auto px-4 text-center text-muted-foreground">
